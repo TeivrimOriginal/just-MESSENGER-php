@@ -1,0 +1,122 @@
+<?php
+// index.php
+session_start();
+require 'db.php';
+$edit_id = null;
+$errors = null;
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+if (isset($_GET['edit'])) {
+    $id = $_GET['edit']; 
+    
+    if (is_numeric($id)) {
+      $edit_id = True;
+    } else {
+      $edit_id = null;
+    }
+  } else {
+
+    $edit_id = False;
+  }
+
+// Проверяем, авторизован ли пользователь
+if (!isset($_SESSION['user_id'])) {
+    $_SESSION['error'] = "Вы не авторизованы!";
+    header("Location: login.php");
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $user_id = $_SESSION['user_id'];
+    $new_username = $_POST['new_username'];
+    $new_password = $_POST['new_password'];
+
+    if (!empty($new_password)) {
+        $new_password = password_hash($new_password, PASSWORD_DEFAULT);
+    } else {
+        // Если новый пароль не указан, берем текущий из базы данных
+        $stmt = $db->prepare("SELECT password FROM users WHERE id = :user_id");
+        $stmt->execute([':user_id' => $user_id]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        $new_password = $user['password'];
+    }
+
+    // Обновляем данные пользователя в базе данных
+    $stmt = $db->prepare("UPDATE users SET username = new_username, password = new_password WHERE id = :user_id");
+
+    try {
+        $stmt->execute([
+            'new_username' => $new_username,
+            'new_password' => $new_password,
+            ':user_id' => $user_id
+        ]);
+
+        $_SESSION['message'] = "Профиль успешно обновлен!";
+        header("Location: profile.php"); // Перенаправляем на страницу профиля
+        exit;
+    } catch (PDOException $e) {
+        $_SESSION['error'] = "Ошибка: " . $e->getMessage();
+        $errors = "ошибка обработки данных";
+    }
+}
+
+// Получение данных пользователя из базы данных
+$stmt = $db->prepare("SELECT * FROM users WHERE id = :user_id");
+$stmt->execute([':user_id' => $_SESSION['user_id']]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+
+  ?>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Профиль</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <?php 
+        if(isset($edit_id)) {
+            
+            if($edit_id) { 
+
+                echo $errors;
+                ?> 
+        <h1>Ваши данные: <br> 
+            Login - <?= htmlspecialchars($_SESSION['username']); ?></h1>
+            Password - <?= htmlspecialchars($_SESSION['password']); ?>
+        <form method="POST" id="login-form">
+
+            <input type="text" name="new_username" placeholder="Логин" required>
+            <input type="password" name="new_password" placeholder="Пароль" required>
+            <p><a href="profile.php" class="logout-btn">Выйти из режима редактирования профиля</a></p>
+            <button type="submit">Сохранить</button>
+        </form>
+                <?php
+            }
+            if(!$edit_id) {
+                ?> 
+                <h1>Добро пожаловать, <?= htmlspecialchars($_SESSION['username']); ?>!</h1>
+                <p><a href="logout.php" class="logout-btn">Выйти</a></p>
+                <p><a href="profile.php?edit=1" class="logout-btn">Редактировать профиль</a></p>
+                <?php
+            }
+        }
+            else {
+            ?> 
+                <h1>Вы ввели неправильную ссылку!<?= htmlspecialchars($_SESSION['username']); ?>!</h1>
+            
+            <p><a href="profile.php" class="logout-btn">Вернуться обратно</a></p>
+            
+            
+            <?php 
+        }
+        ?>
+        
+    </div>
+    <script src="scripts.js"></script>
+</body>
+</html>
